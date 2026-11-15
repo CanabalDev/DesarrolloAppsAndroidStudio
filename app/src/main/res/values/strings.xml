@@ -17,4 +17,22 @@
     <string name="logout_button">Cerrar sesión</string>
     <string name="back_to_dashboard">Volver al dashboard</string>
     <string name="section_coming_soon">La gestión de %1$s estará disponible en la siguiente etapa.</string>
+    <string name="users_title">Usuarios</string>
+    <string name="users_subtitle">Consulta y selecciona una cuenta para gestionarla.</string>
+    <string name="refresh_button">Actualizar</string>
+    <string name="user_create_button">Crear usuario</string>
+    <string name="retry_button">Reintentar</string>
+    <string name="users_empty">No hay usuarios registrados todavía.</string>
+    <string name="users_connection_error">No fue posible cargar los usuarios. Verifica tu conexión e inténtalo de nuevo.</string>
+    <string name="users_unexpected_response">La respuesta de usuarios no tiene el formato esperado.</string>
+    <string name="user_item_username">@%1$s</string>
+    <string name="user_create_title">Nuevo usuario</string>
+    <string name="user_edit_title">Editar usuario</string>
+    <string name="user_create_placeholder">El formulario para crear usuarios estará disponible en la siguiente etapa.</string>
+    <string name="user_edit_placeholder">El formulario para editar a %1$s estará disponible en la siguiente etapa.</string>
+    <string name="back_to_users">Volver a Usuarios</string>
+    <plurals name="users_count">
+        <item quantity="one">%d usuario</item>
+        <item quantity="other">%d usuarios</item>
+    </plurals>
 </resources>

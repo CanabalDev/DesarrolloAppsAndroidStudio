@@ -8,8 +8,10 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.view.LayoutInflater;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.activity.OnBackPressedCallback;
@@ -25,6 +27,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -38,7 +41,16 @@ public class MainActivity extends AppCompatActivity {
     private Button loginButton;
     private ProgressBar progressBar;
     private TextView errorView;
-    private boolean showingSectionPlaceholder;
+    private int usersRequestGeneration;
+    private Screen currentScreen = Screen.LOGIN;
+
+    private enum Screen {
+        LOGIN,
+        DASHBOARD,
+        SECTION_PLACEHOLDER,
+        USERS_LIST,
+        USER_FORM_PLACEHOLDER
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,11 +60,17 @@ public class MainActivity extends AppCompatActivity {
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                if (showingSectionPlaceholder) {
-                    showSignedInScreen(sessionManager.getUsername());
-                } else {
-                    setEnabled(false);
-                    getOnBackPressedDispatcher().onBackPressed();
+                switch (currentScreen) {
+                    case SECTION_PLACEHOLDER:
+                    case USERS_LIST:
+                        showSignedInScreen(sessionManager.getUsername());
+                        break;
+                    case USER_FORM_PLACEHOLDER:
+                        showUsersList();
+                        break;
+                    default:
+                        setEnabled(false);
+                        getOnBackPressedDispatcher().onBackPressed();
                 }
             }
         });
@@ -65,6 +83,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showLoginScreen() {
+        currentScreen = Screen.LOGIN;
         setContentView(R.layout.activity_main);
         applyWindowInsets();
 
@@ -193,33 +212,166 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showSignedInScreen(String username) {
-        showingSectionPlaceholder = false;
+        if (username == null) {
+            showLoginScreen();
+            return;
+        }
+        currentScreen = Screen.DASHBOARD;
         setContentView(R.layout.activity_dashboard);
         applyWindowInsets();
         TextView welcomeView = findViewById(R.id.session_welcome);
         welcomeView.setText(getString(R.string.session_welcome, username));
 
         findViewById(R.id.users_card).setOnClickListener(view ->
-                showSectionPlaceholder(getString(R.string.dashboard_users)));
+                showUsersList());
         findViewById(R.id.farms_card).setOnClickListener(view ->
                 showSectionPlaceholder(getString(R.string.dashboard_farms)));
         findViewById(R.id.logout_button).setOnClickListener(view -> {
             sessionManager.clear();
-            showingSectionPlaceholder = false;
             showLoginScreen();
         });
     }
 
     private void showSectionPlaceholder(String sectionName) {
-        showingSectionPlaceholder = true;
+        showPlaceholder(
+                Screen.SECTION_PLACEHOLDER,
+                sectionName,
+                getString(R.string.section_coming_soon, sectionName),
+                R.string.back_to_dashboard,
+                () -> showSignedInScreen(sessionManager.getUsername())
+        );
+    }
+
+    private void showUsersList() {
+        currentScreen = Screen.USERS_LIST;
+        int requestGeneration = ++usersRequestGeneration;
+        setContentView(R.layout.activity_users);
+        applyWindowInsets();
+        findViewById(R.id.users_back_button).setOnClickListener(view ->
+                showSignedInScreen(sessionManager.getUsername()));
+        findViewById(R.id.users_create_button).setOnClickListener(view ->
+                showUserFormPlaceholder(null));
+        findViewById(R.id.users_refresh_button).setOnClickListener(view -> loadUsers(requestGeneration));
+        findViewById(R.id.users_retry_button).setOnClickListener(view -> loadUsers(requestGeneration));
+        loadUsers(requestGeneration);
+    }
+
+    private void loadUsers(int requestGeneration) {
+        if (currentScreen != Screen.USERS_LIST || requestGeneration != usersRequestGeneration) {
+            return;
+        }
+        ProgressBar usersProgress = findViewById(R.id.users_progress);
+        Button refreshButton = findViewById(R.id.users_refresh_button);
+        usersProgress.setVisibility(View.VISIBLE);
+        refreshButton.setEnabled(false);
+        findViewById(R.id.users_error).setVisibility(View.GONE);
+        findViewById(R.id.users_retry_button).setVisibility(View.GONE);
+        findViewById(R.id.users_empty).setVisibility(View.GONE);
+        LinearLayout usersContainer = findViewById(R.id.users_container);
+        usersContainer.removeAllViews();
+
+        executor.execute(() -> {
+            List<Usuario> users = null;
+            String errorMessage = null;
+            try {
+                ApiClient.ApiResponse response = ApiClient.getUsers();
+                if (response.statusCode == 200) {
+                    users = ApiClient.parseUsers(response.body);
+                } else {
+                    errorMessage = ApiClient.errorMessage(response.body, response.statusCode);
+                }
+            } catch (IOException exception) {
+                errorMessage = getString(R.string.users_connection_error);
+            } catch (org.json.JSONException exception) {
+                errorMessage = getString(R.string.users_unexpected_response);
+            }
+
+            List<Usuario> result = users;
+            String failure = errorMessage;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()
+                        || currentScreen != Screen.USERS_LIST
+                        || requestGeneration != usersRequestGeneration) {
+                    return;
+                }
+                updateUsersList(result, failure);
+            });
+        });
+    }
+
+    private void updateUsersList(List<Usuario> users, String errorMessage) {
+        ProgressBar usersProgress = findViewById(R.id.users_progress);
+        Button refreshButton = findViewById(R.id.users_refresh_button);
+        TextView errorView = findViewById(R.id.users_error);
+        Button retryButton = findViewById(R.id.users_retry_button);
+        TextView emptyView = findViewById(R.id.users_empty);
+        LinearLayout usersContainer = findViewById(R.id.users_container);
+        TextView countView = findViewById(R.id.users_count);
+
+        usersProgress.setVisibility(View.GONE);
+        refreshButton.setEnabled(true);
+        if (errorMessage != null) {
+            errorView.setText(errorMessage);
+            errorView.setVisibility(View.VISIBLE);
+            retryButton.setVisibility(View.VISIBLE);
+            countView.setText("");
+            return;
+        }
+
+        countView.setText(getResources().getQuantityString(
+                R.plurals.users_count,
+                users.size(),
+                users.size()
+        ));
+        if (users.isEmpty()) {
+            emptyView.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        LayoutInflater inflater = LayoutInflater.from(this);
+        for (Usuario user : users) {
+            View row = inflater.inflate(R.layout.item_user, usersContainer, false);
+            ((TextView) row.findViewById(R.id.user_item_name)).setText(user.nombre);
+            ((TextView) row.findViewById(R.id.user_item_username)).setText(
+                    getString(R.string.user_item_username, user.nombreUsuario));
+            ((TextView) row.findViewById(R.id.user_item_email)).setText(user.correo);
+            row.setOnClickListener(view -> showUserFormPlaceholder(user));
+            usersContainer.addView(row);
+        }
+    }
+
+    private void showUserFormPlaceholder(Usuario user) {
+        boolean creating = user == null;
+        String title = getString(creating ? R.string.user_create_title : R.string.user_edit_title);
+        String message = creating
+                ? getString(R.string.user_create_placeholder)
+                : getString(R.string.user_edit_placeholder, user.nombreUsuario);
+        showPlaceholder(
+                Screen.USER_FORM_PLACEHOLDER,
+                title,
+                message,
+                R.string.back_to_users,
+                this::showUsersList
+        );
+    }
+
+    private void showPlaceholder(
+            Screen screen,
+            String title,
+            String message,
+            int backButtonText,
+            Runnable backAction
+    ) {
+        currentScreen = screen;
         setContentView(R.layout.activity_section_placeholder);
         applyWindowInsets();
         TextView titleView = findViewById(R.id.section_title);
-        titleView.setText(sectionName);
+        titleView.setText(title);
         TextView messageView = findViewById(R.id.section_message);
-        messageView.setText(getString(R.string.section_coming_soon, sectionName));
-        findViewById(R.id.section_back_button).setOnClickListener(view ->
-                showSignedInScreen(sessionManager.getUsername()));
+        messageView.setText(message);
+        Button backButton = findViewById(R.id.section_back_button);
+        backButton.setText(backButtonText);
+        backButton.setOnClickListener(view -> backAction.run());
     }
 
     private void applyWindowInsets() {
