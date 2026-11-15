@@ -32,6 +32,51 @@ final class ApiClient {
         return request("GET", "api/usuarios", null);
     }
 
+    static ApiResponse getUser(String userId) throws IOException {
+        return request("GET", "api/usuario/" + userId, null);
+    }
+
+    static ApiResponse createUser(String username, String password, String email, String name)
+            throws IOException, JSONException {
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("nombreUsuario", username);
+        requestBody.put("contrasena", password);
+        requestBody.put("correo", email);
+        requestBody.put("nombre", name);
+        return request("POST", "api/usuarios", requestBody);
+    }
+
+    static ApiResponse updateUser(
+            String userId,
+            String username,
+            String password,
+            String email,
+            String name
+    ) throws IOException, JSONException {
+        JSONObject requestBody = new JSONObject();
+        requestBody.put("nombreUsuario", username);
+        requestBody.put("correo", email);
+        requestBody.put("nombre", name);
+        if (password != null && !password.trim().isEmpty()) {
+            requestBody.put("contrasena", password);
+        }
+        return request("PUT", "api/usuario/" + userId, requestBody);
+    }
+
+    static ApiResponse deleteUser(String userId) throws IOException {
+        return request("DELETE", "api/usuario/" + userId, null);
+    }
+
+    static Usuario parseUser(String responseBody) throws JSONException {
+        JSONObject item = new JSONObject(responseBody);
+        return new Usuario(
+                item.optString("id"),
+                item.optString("nombreUsuario"),
+                item.optString("nombre"),
+                item.optString("correo")
+        );
+    }
+
     static List<Usuario> parseUsers(String responseBody) throws JSONException {
         JSONArray array = new JSONArray(responseBody);
         List<Usuario> users = new ArrayList<>(array.length());
@@ -87,7 +132,7 @@ final class ApiClient {
             }
         } catch (JSONException ignored) {
         }
-        return "No fue posible iniciar sesión (HTTP " + statusCode + ").";
+        return "La solicitud no pudo completarse (HTTP " + statusCode + ").";
     }
 
     private static String readBody(InputStream inputStream) throws IOException {

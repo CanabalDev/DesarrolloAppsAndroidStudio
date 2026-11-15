@@ -12,8 +12,11 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.view.LayoutInflater;
+import android.widget.Toast;
+import android.util.Patterns;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AlertDialog;
 import androidx.activity.OnBackPressedCallback;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -42,6 +45,23 @@ public class MainActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private TextView errorView;
     private int usersRequestGeneration;
+    private int userFormRequestGeneration;
+    private TextInputLayout userFormUsernameLayout;
+    private TextInputLayout userFormNameLayout;
+    private TextInputLayout userFormEmailLayout;
+    private TextInputLayout userFormPasswordLayout;
+    private TextInputLayout userFormPasswordConfirmationLayout;
+    private TextInputEditText userFormUsernameInput;
+    private TextInputEditText userFormNameInput;
+    private TextInputEditText userFormEmailInput;
+    private TextInputEditText userFormPasswordInput;
+    private TextInputEditText userFormPasswordConfirmationInput;
+    private Button userFormSaveButton;
+    private Button userFormDeleteButton;
+    private Button userFormRetryButton;
+    private ProgressBar userFormProgress;
+    private TextView userFormErrorView;
+    private String editingUserId;
     private Screen currentScreen = Screen.LOGIN;
 
     private enum Screen {
@@ -49,7 +69,7 @@ public class MainActivity extends AppCompatActivity {
         DASHBOARD,
         SECTION_PLACEHOLDER,
         USERS_LIST,
-        USER_FORM_PLACEHOLDER
+        USER_FORM
     }
 
     @Override
@@ -65,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
                     case USERS_LIST:
                         showSignedInScreen(sessionManager.getUsername());
                         break;
-                    case USER_FORM_PLACEHOLDER:
+                    case USER_FORM:
                         showUsersList();
                         break;
                     default:
@@ -250,7 +270,7 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.users_back_button).setOnClickListener(view ->
                 showSignedInScreen(sessionManager.getUsername()));
         findViewById(R.id.users_create_button).setOnClickListener(view ->
-                showUserFormPlaceholder(null));
+                showUserForm(null));
         findViewById(R.id.users_refresh_button).setOnClickListener(view -> loadUsers(requestGeneration));
         findViewById(R.id.users_retry_button).setOnClickListener(view -> loadUsers(requestGeneration));
         loadUsers(requestGeneration);
@@ -335,24 +355,314 @@ public class MainActivity extends AppCompatActivity {
             ((TextView) row.findViewById(R.id.user_item_username)).setText(
                     getString(R.string.user_item_username, user.nombreUsuario));
             ((TextView) row.findViewById(R.id.user_item_email)).setText(user.correo);
-            row.setOnClickListener(view -> showUserFormPlaceholder(user));
+            row.setOnClickListener(view -> showUserForm(user));
             usersContainer.addView(row);
         }
     }
 
-    private void showUserFormPlaceholder(Usuario user) {
+    private void showUserForm(Usuario user) {
         boolean creating = user == null;
-        String title = getString(creating ? R.string.user_create_title : R.string.user_edit_title);
-        String message = creating
-                ? getString(R.string.user_create_placeholder)
-                : getString(R.string.user_edit_placeholder, user.nombreUsuario);
-        showPlaceholder(
-                Screen.USER_FORM_PLACEHOLDER,
-                title,
-                message,
-                R.string.back_to_users,
-                this::showUsersList
-        );
+        currentScreen = Screen.USER_FORM;
+        editingUserId = creating ? null : user.id;
+        int requestGeneration = ++userFormRequestGeneration;
+        setContentView(R.layout.activity_user_form);
+        applyWindowInsets();
+
+        userFormUsernameLayout = findViewById(R.id.user_form_username_layout);
+        userFormNameLayout = findViewById(R.id.user_form_name_layout);
+        userFormEmailLayout = findViewById(R.id.user_form_email_layout);
+        userFormPasswordLayout = findViewById(R.id.user_form_password_layout);
+        userFormPasswordConfirmationLayout = findViewById(R.id.user_form_password_confirmation_layout);
+        userFormUsernameInput = findViewById(R.id.user_form_username);
+        userFormNameInput = findViewById(R.id.user_form_name);
+        userFormEmailInput = findViewById(R.id.user_form_email);
+        userFormPasswordInput = findViewById(R.id.user_form_password);
+        userFormPasswordConfirmationInput = findViewById(R.id.user_form_password_confirmation);
+        userFormSaveButton = findViewById(R.id.user_form_save_button);
+        userFormDeleteButton = findViewById(R.id.user_form_delete_button);
+        userFormRetryButton = findViewById(R.id.user_form_retry_button);
+        userFormProgress = findViewById(R.id.user_form_progress);
+        userFormErrorView = findViewById(R.id.user_form_error);
+
+        TextView titleView = findViewById(R.id.user_form_title);
+        titleView.setText(getString(creating ? R.string.user_create_title : R.string.user_edit_title));
+        userFormDeleteButton.setVisibility(creating ? View.GONE : View.VISIBLE);
+        userFormPasswordLayout.setHint(getString(
+                creating ? R.string.user_form_password : R.string.user_form_password_optional));
+        userFormPasswordConfirmationLayout.setHint(getString(
+                creating ? R.string.user_form_password_confirmation
+                        : R.string.user_form_password_confirmation_optional));
+        userFormPasswordLayout.setHelperText(creating
+                ? null
+                : getString(R.string.user_form_password_helper));
+        findViewById(R.id.user_form_back_button).setOnClickListener(view -> showUsersList());
+        userFormSaveButton.setOnClickListener(view -> submitUserForm(requestGeneration));
+        userFormDeleteButton.setOnClickListener(view -> confirmDeleteUser(requestGeneration));
+        userFormRetryButton.setOnClickListener(view -> loadUserForEdit(editingUserId, requestGeneration));
+
+        userFormUsernameInput.addTextChangedListener(createFormErrorClearingWatcher(userFormUsernameLayout));
+        userFormNameInput.addTextChangedListener(createFormErrorClearingWatcher(userFormNameLayout));
+        userFormEmailInput.addTextChangedListener(createFormErrorClearingWatcher(userFormEmailLayout));
+        userFormPasswordInput.addTextChangedListener(createPasswordErrorClearingWatcher());
+        userFormPasswordConfirmationInput.addTextChangedListener(
+                createPasswordErrorClearingWatcher());
+
+        if (creating) {
+            setUserFormEnabled(true);
+            userFormProgress.setVisibility(View.GONE);
+        } else {
+            loadUserForEdit(user.id, requestGeneration);
+        }
+    }
+
+    private TextWatcher createFormErrorClearingWatcher(TextInputLayout inputLayout) {
+        return new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                inputLayout.setError(null);
+                if (userFormErrorView != null) {
+                    userFormErrorView.setVisibility(View.GONE);
+                }
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+            }
+        };
+    }
+
+    private TextWatcher createPasswordErrorClearingWatcher() {
+        return new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                userFormPasswordLayout.setError(null);
+                userFormPasswordConfirmationLayout.setError(null);
+                userFormErrorView.setVisibility(View.GONE);
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+            }
+        };
+    }
+
+    private void loadUserForEdit(String userId, int requestGeneration) {
+        if (userId == null || currentScreen != Screen.USER_FORM
+                || requestGeneration != userFormRequestGeneration) {
+            return;
+        }
+        setUserFormEnabled(false);
+        userFormProgress.setVisibility(View.VISIBLE);
+        userFormErrorView.setVisibility(View.GONE);
+        userFormRetryButton.setVisibility(View.GONE);
+
+        executor.execute(() -> {
+            Usuario user = null;
+            String failure = null;
+            try {
+                ApiClient.ApiResponse response = ApiClient.getUser(userId);
+                if (response.statusCode == 200) {
+                    user = ApiClient.parseUser(response.body);
+                } else {
+                    failure = ApiClient.errorMessage(response.body, response.statusCode);
+                }
+            } catch (IOException exception) {
+                failure = getString(R.string.user_form_connection_error);
+            } catch (JSONException exception) {
+                failure = getString(R.string.user_form_unexpected_response);
+            }
+
+            Usuario result = user;
+            String error = failure;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed() || currentScreen != Screen.USER_FORM
+                        || requestGeneration != userFormRequestGeneration) {
+                    return;
+                }
+                userFormProgress.setVisibility(View.GONE);
+                if (error != null) {
+                    userFormErrorView.setText(error);
+                    userFormErrorView.setVisibility(View.VISIBLE);
+                    userFormRetryButton.setVisibility(View.VISIBLE);
+                    return;
+                }
+                userFormUsernameInput.setText(result.nombreUsuario);
+                userFormNameInput.setText(result.nombre);
+                userFormEmailInput.setText(result.correo);
+                userFormPasswordInput.setText("");
+                userFormPasswordConfirmationInput.setText("");
+                setUserFormEnabled(true);
+            });
+        });
+    }
+
+    private void submitUserForm(int requestGeneration) {
+        userFormUsernameLayout.setError(null);
+        userFormNameLayout.setError(null);
+        userFormEmailLayout.setError(null);
+        userFormPasswordLayout.setError(null);
+        userFormPasswordConfirmationLayout.setError(null);
+        userFormErrorView.setVisibility(View.GONE);
+
+        String username = valueOf(userFormUsernameInput).trim();
+        String name = valueOf(userFormNameInput).trim();
+        String email = valueOf(userFormEmailInput).trim();
+        String password = valueOf(userFormPasswordInput);
+        String passwordConfirmation = valueOf(userFormPasswordConfirmationInput);
+        boolean creating = editingUserId == null;
+        boolean valid = true;
+
+        if (username.isEmpty()) {
+            userFormUsernameLayout.setError(getString(R.string.user_form_username_required));
+            valid = false;
+        } else if (username.length() > 50) {
+            userFormUsernameLayout.setError(getString(R.string.user_form_username_too_long));
+            valid = false;
+        }
+        if (name.isEmpty()) {
+            userFormNameLayout.setError(getString(R.string.user_form_name_required));
+            valid = false;
+        } else if (name.length() > 100) {
+            userFormNameLayout.setError(getString(R.string.user_form_name_too_long));
+            valid = false;
+        }
+        if (email.isEmpty()) {
+            userFormEmailLayout.setError(getString(R.string.user_form_email_required));
+            valid = false;
+        } else if (email.length() > 254 || !Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            userFormEmailLayout.setError(getString(R.string.user_form_email_invalid));
+            valid = false;
+        }
+        if (creating && password.trim().isEmpty()) {
+            userFormPasswordLayout.setError(getString(R.string.user_form_password_required));
+            valid = false;
+        }
+        if (creating && passwordConfirmation.trim().isEmpty()) {
+            userFormPasswordConfirmationLayout.setError(
+                    getString(R.string.user_form_password_confirmation_required));
+            valid = false;
+        }
+        if (!password.equals(passwordConfirmation)) {
+            userFormPasswordConfirmationLayout.setError(
+                    getString(R.string.user_form_password_mismatch));
+            valid = false;
+        }
+        if (!valid) {
+            return;
+        }
+
+        hideKeyboard();
+        setUserFormBusy(true);
+        String userId = editingUserId;
+        executor.execute(() -> {
+            String failure = null;
+            boolean success = false;
+            try {
+                ApiClient.ApiResponse response = creating
+                        ? ApiClient.createUser(username, password, email, name)
+                        : ApiClient.updateUser(userId, username, password, email, name);
+                success = creating ? response.statusCode == 201 : response.statusCode == 200;
+                if (!success) {
+                    failure = ApiClient.errorMessage(response.body, response.statusCode);
+                }
+            } catch (IOException exception) {
+                failure = getString(R.string.user_form_connection_error);
+            } catch (JSONException exception) {
+                failure = getString(R.string.user_form_unexpected_response);
+            }
+
+            boolean saved = success;
+            String error = failure;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed() || currentScreen != Screen.USER_FORM
+                        || requestGeneration != userFormRequestGeneration) {
+                    return;
+                }
+                if (saved) {
+                    Toast.makeText(this, getString(creating
+                            ? R.string.user_created_successfully
+                            : R.string.user_updated_successfully), Toast.LENGTH_SHORT).show();
+                    showUsersList();
+                } else {
+                    setUserFormBusy(false);
+                    userFormErrorView.setText(error);
+                    userFormErrorView.setVisibility(View.VISIBLE);
+                }
+            });
+        });
+    }
+
+    private void confirmDeleteUser(int requestGeneration) {
+        String username = valueOf(userFormUsernameInput).trim();
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.user_delete_title)
+                .setMessage(getString(R.string.user_delete_confirmation, username))
+                .setNegativeButton(R.string.cancel_button, (dialog, which) -> dialog.dismiss())
+                .setPositiveButton(R.string.delete_button, (dialog, which) ->
+                        deleteUser(requestGeneration))
+                .show();
+    }
+
+    private void deleteUser(int requestGeneration) {
+        if (editingUserId == null || currentScreen != Screen.USER_FORM
+                || requestGeneration != userFormRequestGeneration) {
+            return;
+        }
+        setUserFormBusy(true);
+        String userId = editingUserId;
+        executor.execute(() -> {
+            String failure = null;
+            boolean deleted = false;
+            try {
+                ApiClient.ApiResponse response = ApiClient.deleteUser(userId);
+                deleted = response.statusCode == 204;
+                if (!deleted) {
+                    failure = ApiClient.errorMessage(response.body, response.statusCode);
+                }
+            } catch (IOException exception) {
+                failure = getString(R.string.user_form_connection_error);
+            }
+
+            boolean wasDeleted = deleted;
+            String error = failure;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed() || currentScreen != Screen.USER_FORM
+                        || requestGeneration != userFormRequestGeneration) {
+                    return;
+                }
+                if (wasDeleted) {
+                    Toast.makeText(this, R.string.user_deleted_successfully, Toast.LENGTH_SHORT).show();
+                    showUsersList();
+                } else {
+                    setUserFormBusy(false);
+                    userFormErrorView.setText(error);
+                    userFormErrorView.setVisibility(View.VISIBLE);
+                }
+            });
+        });
+    }
+
+    private void setUserFormBusy(boolean busy) {
+        setUserFormEnabled(!busy);
+        userFormProgress.setVisibility(busy ? View.VISIBLE : View.GONE);
+    }
+
+    private void setUserFormEnabled(boolean enabled) {
+        userFormUsernameInput.setEnabled(enabled);
+        userFormNameInput.setEnabled(enabled);
+        userFormEmailInput.setEnabled(enabled);
+        userFormPasswordInput.setEnabled(enabled);
+        userFormPasswordConfirmationInput.setEnabled(enabled);
+        userFormSaveButton.setEnabled(enabled);
+        userFormDeleteButton.setEnabled(enabled);
     }
 
     private void showPlaceholder(
