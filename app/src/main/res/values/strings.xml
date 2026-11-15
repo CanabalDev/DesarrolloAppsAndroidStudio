@@ -8,4 +8,13 @@
     <string name="login_button">Iniciar sesión</string>
     <string name="login_loading">Validando...</string>
     <string name="session_welcome">Bienvenido, %1$s</string>
+    <string name="app_brand">GESTIÓN RURAL</string>
+    <string name="dashboard_users">Usuarios</string>
+    <string name="dashboard_farms">Fincas</string>
+    <string name="dashboard_prompt">¿Qué deseas gestionar hoy?</string>
+    <string name="dashboard_users_description">Gestiona las cuentas de usuario</string>
+    <string name="dashboard_farms_description">Consulta y administra tus fincas</string>
+    <string name="logout_button">Cerrar sesión</string>
+    <string name="back_to_dashboard">Volver al dashboard</string>
+    <string name="section_coming_soon">La gestión de %1$s estará disponible en la siguiente etapa.</string>
 </resources>

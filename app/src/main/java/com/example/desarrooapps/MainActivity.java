@@ -12,6 +12,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.OnBackPressedCallback;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -37,12 +38,24 @@ public class MainActivity extends AppCompatActivity {
     private Button loginButton;
     private ProgressBar progressBar;
     private TextView errorView;
+    private boolean showingSectionPlaceholder;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         WindowCompat.enableEdgeToEdge(getWindow());
         sessionManager = new SessionManager(this);
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (showingSectionPlaceholder) {
+                    showSignedInScreen(sessionManager.getUsername());
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                }
+            }
+        });
 
         if (sessionManager.getUsername() != null) {
             showSignedInScreen(sessionManager.getUsername());
@@ -180,10 +193,33 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showSignedInScreen(String username) {
-        setContentView(R.layout.activity_session);
+        showingSectionPlaceholder = false;
+        setContentView(R.layout.activity_dashboard);
         applyWindowInsets();
         TextView welcomeView = findViewById(R.id.session_welcome);
         welcomeView.setText(getString(R.string.session_welcome, username));
+
+        findViewById(R.id.users_card).setOnClickListener(view ->
+                showSectionPlaceholder(getString(R.string.dashboard_users)));
+        findViewById(R.id.farms_card).setOnClickListener(view ->
+                showSectionPlaceholder(getString(R.string.dashboard_farms)));
+        findViewById(R.id.logout_button).setOnClickListener(view -> {
+            sessionManager.clear();
+            showingSectionPlaceholder = false;
+            showLoginScreen();
+        });
+    }
+
+    private void showSectionPlaceholder(String sectionName) {
+        showingSectionPlaceholder = true;
+        setContentView(R.layout.activity_section_placeholder);
+        applyWindowInsets();
+        TextView titleView = findViewById(R.id.section_title);
+        titleView.setText(sectionName);
+        TextView messageView = findViewById(R.id.section_message);
+        messageView.setText(getString(R.string.section_coming_soon, sectionName));
+        findViewById(R.id.section_back_button).setOnClickListener(view ->
+                showSignedInScreen(sessionManager.getUsername()));
     }
 
     private void applyWindowInsets() {
