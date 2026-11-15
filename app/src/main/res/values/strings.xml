@@ -63,4 +63,30 @@
         <item quantity="one">%d usuario</item>
         <item quantity="other">%d usuarios</item>
     </plurals>
+    <string name="farms_title">Fincas</string>
+    <string name="farms_subtitle">Consulta las fincas registradas y sus detalles.</string>
+    <string name="farm_create_button">Crear finca</string>
+    <string name="farms_empty">No hay fincas registradas todavía.</string>
+    <string name="farms_connection_error">No fue posible cargar las fincas. Verifica tu conexión e inténtalo de nuevo.</string>
+    <string name="farms_unexpected_response">La respuesta de fincas no tiene el formato esperado.</string>
+    <string name="farm_item_area">%1$s ha · %2$s m²</string>
+    <string name="farm_item_owner">Propietario: %1$s</string>
+    <string name="farm_item_manager">Capataz: %1$s</string>
+    <string name="farm_owner_unknown">Sin propietario</string>
+    <string name="farm_manager_unassigned">Sin asignar</string>
+    <string name="farm_location_unspecified">Ubicación no especificada</string>
+    <string name="farm_production_milk">Leche</string>
+    <string name="farm_production_cereals">Cereales</string>
+    <string name="farm_production_fruits">Frutas</string>
+    <string name="farm_production_vegetables">Verduras</string>
+    <string name="farm_production_none">Sin producción seleccionada</string>
+    <string name="farm_create_title">Nueva finca</string>
+    <string name="farm_edit_title">Editar finca</string>
+    <string name="farm_create_placeholder">El formulario para crear fincas estará disponible en la siguiente etapa.</string>
+    <string name="farm_edit_placeholder">El formulario para editar %1$s estará disponible en la siguiente etapa.</string>
+    <string name="back_to_farms">Volver a Fincas</string>
+    <plurals name="farms_count">
+        <item quantity="one">%d finca</item>
+        <item quantity="other">%d fincas</item>
+    </plurals>
 </resources>

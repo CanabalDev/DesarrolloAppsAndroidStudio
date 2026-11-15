@@ -92,6 +92,50 @@ final class ApiClient {
         return users;
     }
 
+    static ApiResponse getFarms() throws IOException {
+        return request("GET", "api/fincas", null);
+    }
+
+    static List<Finca> parseFarms(String responseBody) throws JSONException {
+        JSONArray array = new JSONArray(responseBody);
+        List<Finca> farms = new ArrayList<>(array.length());
+        for (int index = 0; index < array.length(); index++) {
+            JSONObject item = array.getJSONObject(index);
+            farms.add(new Finca(
+                    item.optString("id"),
+                    item.optString("nombreFinca"),
+                    item.optDouble("areaHa", 0),
+                    item.optDouble("areaM2", 0),
+                    parseUserReference(item.optJSONObject("propietario")),
+                    parseUserReference(item.optJSONObject("capataz")),
+                    nullableString(item, "pais"),
+                    nullableString(item, "departamento"),
+                    nullableString(item, "ciudad"),
+                    item.optBoolean("produceLeche", false),
+                    item.optBoolean("produceCereales", false),
+                    item.optBoolean("produceFrutas", false),
+                    item.optBoolean("produceVerduras", false)
+            ));
+        }
+        return farms;
+    }
+
+    private static Usuario parseUserReference(JSONObject item) {
+        if (item == null) {
+            return null;
+        }
+        return new Usuario(
+                item.optString("id"),
+                item.optString("nombreUsuario"),
+                item.optString("nombre"),
+                ""
+        );
+    }
+
+    private static String nullableString(JSONObject item, String key) {
+        return item.isNull(key) ? null : item.optString(key, null);
+    }
+
     private static ApiResponse request(String method, String path, JSONObject requestBody)
             throws IOException {
         HttpURLConnection connection = null;

@@ -30,7 +30,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -45,6 +47,7 @@ public class MainActivity extends AppCompatActivity {
     private ProgressBar progressBar;
     private TextView errorView;
     private int usersRequestGeneration;
+    private int farmsRequestGeneration;
     private int userFormRequestGeneration;
     private TextInputLayout userFormUsernameLayout;
     private TextInputLayout userFormNameLayout;
@@ -69,7 +72,9 @@ public class MainActivity extends AppCompatActivity {
         DASHBOARD,
         SECTION_PLACEHOLDER,
         USERS_LIST,
-        USER_FORM
+        USER_FORM,
+        FARMS_LIST,
+        FARM_FORM_PLACEHOLDER
     }
 
     @Override
@@ -87,6 +92,12 @@ public class MainActivity extends AppCompatActivity {
                         break;
                     case USER_FORM:
                         showUsersList();
+                        break;
+                    case FARMS_LIST:
+                        showSignedInScreen(sessionManager.getUsername());
+                        break;
+                    case FARM_FORM_PLACEHOLDER:
+                        showFarmsList();
                         break;
                     default:
                         setEnabled(false);
@@ -245,7 +256,7 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.users_card).setOnClickListener(view ->
                 showUsersList());
         findViewById(R.id.farms_card).setOnClickListener(view ->
-                showSectionPlaceholder(getString(R.string.dashboard_farms)));
+                showFarmsList());
         findViewById(R.id.logout_button).setOnClickListener(view -> {
             sessionManager.clear();
             showLoginScreen();
@@ -274,6 +285,184 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.users_refresh_button).setOnClickListener(view -> loadUsers(requestGeneration));
         findViewById(R.id.users_retry_button).setOnClickListener(view -> loadUsers(requestGeneration));
         loadUsers(requestGeneration);
+    }
+
+    private void showFarmsList() {
+        currentScreen = Screen.FARMS_LIST;
+        int requestGeneration = ++farmsRequestGeneration;
+        setContentView(R.layout.activity_farms);
+        applyWindowInsets();
+        findViewById(R.id.farms_back_button).setOnClickListener(view ->
+                showSignedInScreen(sessionManager.getUsername()));
+        findViewById(R.id.farms_create_button).setOnClickListener(view ->
+                showFarmFormPlaceholder(null));
+        findViewById(R.id.farms_refresh_button).setOnClickListener(view -> loadFarms(requestGeneration));
+        findViewById(R.id.farms_retry_button).setOnClickListener(view -> loadFarms(requestGeneration));
+        loadFarms(requestGeneration);
+    }
+
+    private void loadFarms(int requestGeneration) {
+        if (currentScreen != Screen.FARMS_LIST || requestGeneration != farmsRequestGeneration) {
+            return;
+        }
+        ProgressBar farmsProgress = findViewById(R.id.farms_progress);
+        Button refreshButton = findViewById(R.id.farms_refresh_button);
+        farmsProgress.setVisibility(View.VISIBLE);
+        refreshButton.setEnabled(false);
+        findViewById(R.id.farms_error).setVisibility(View.GONE);
+        findViewById(R.id.farms_retry_button).setVisibility(View.GONE);
+        findViewById(R.id.farms_empty).setVisibility(View.GONE);
+        LinearLayout farmsContainer = findViewById(R.id.farms_container);
+        farmsContainer.removeAllViews();
+
+        executor.execute(() -> {
+            List<Finca> farms = null;
+            String errorMessage = null;
+            try {
+                ApiClient.ApiResponse response = ApiClient.getFarms();
+                if (response.statusCode == 200) {
+                    farms = ApiClient.parseFarms(response.body);
+                } else {
+                    errorMessage = ApiClient.errorMessage(response.body, response.statusCode);
+                }
+            } catch (IOException exception) {
+                errorMessage = getString(R.string.farms_connection_error);
+            } catch (JSONException exception) {
+                errorMessage = getString(R.string.farms_unexpected_response);
+            }
+
+            List<Finca> result = farms;
+            String failure = errorMessage;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()
+                        || currentScreen != Screen.FARMS_LIST
+                        || requestGeneration != farmsRequestGeneration) {
+                    return;
+                }
+                updateFarmsList(result, failure);
+            });
+        });
+    }
+
+    private void updateFarmsList(List<Finca> farms, String errorMessage) {
+        ProgressBar farmsProgress = findViewById(R.id.farms_progress);
+        Button refreshButton = findViewById(R.id.farms_refresh_button);
+        TextView errorView = findViewById(R.id.farms_error);
+        Button retryButton = findViewById(R.id.farms_retry_button);
+        TextView emptyView = findViewById(R.id.farms_empty);
+        LinearLayout farmsContainer = findViewById(R.id.farms_container);
+        TextView countView = findViewById(R.id.farms_count);
+
+        farmsProgress.setVisibility(View.GONE);
+        refreshButton.setEnabled(true);
+        if (errorMessage != null) {
+            errorView.setText(errorMessage);
+            errorView.setVisibility(View.VISIBLE);
+            retryButton.setVisibility(View.VISIBLE);
+            countView.setText("");
+            return;
+        }
+
+        countView.setText(getResources().getQuantityString(
+                R.plurals.farms_count,
+                farms.size(),
+                farms.size()
+        ));
+        if (farms.isEmpty()) {
+            emptyView.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        LayoutInflater inflater = LayoutInflater.from(this);
+        for (Finca farm : farms) {
+            View row = inflater.inflate(R.layout.item_farm, farmsContainer, false);
+            ((TextView) row.findViewById(R.id.farm_item_name)).setText(farm.nombreFinca);
+            ((TextView) row.findViewById(R.id.farm_item_area)).setText(getString(
+                    R.string.farm_item_area,
+                    String.format(Locale.getDefault(), "%.2f", farm.areaHa),
+                    String.format(Locale.getDefault(), "%.2f", farm.areaM2)
+            ));
+            ((TextView) row.findViewById(R.id.farm_item_owner)).setText(getString(
+                    R.string.farm_item_owner,
+                    farm.propietario == null ? getString(R.string.farm_owner_unknown)
+                            : farm.propietario.nombre
+            ));
+            ((TextView) row.findViewById(R.id.farm_item_manager)).setText(getString(
+                    R.string.farm_item_manager,
+                    farm.capataz == null ? getString(R.string.farm_manager_unassigned)
+                            : farm.capataz.nombre
+            ));
+            ((TextView) row.findViewById(R.id.farm_item_location)).setText(formatFarmLocation(farm));
+            ((TextView) row.findViewById(R.id.farm_item_production)).setText(formatFarmProduction(farm));
+            row.setOnClickListener(view -> showFarmFormPlaceholder(farm));
+            farmsContainer.addView(row);
+        }
+    }
+
+    private String formatFarmLocation(Finca farm) {
+        List<String> parts = new ArrayList<>();
+        addLocationPart(parts, farm.ciudad);
+        addLocationPart(parts, farm.departamento);
+        addLocationPart(parts, farm.pais);
+        if (parts.isEmpty()) {
+            return getString(R.string.farm_location_unspecified);
+        }
+        StringBuilder location = new StringBuilder();
+        for (String part : parts) {
+            if (location.length() > 0) {
+                location.append(", ");
+            }
+            location.append(part);
+        }
+        return location.toString();
+    }
+
+    private void addLocationPart(List<String> parts, String value) {
+        if (value != null && !value.trim().isEmpty()) {
+            parts.add(value);
+        }
+    }
+
+    private String formatFarmProduction(Finca farm) {
+        List<String> products = new ArrayList<>();
+        if (farm.produceLeche) {
+            products.add(getString(R.string.farm_production_milk));
+        }
+        if (farm.produceCereales) {
+            products.add(getString(R.string.farm_production_cereals));
+        }
+        if (farm.produceFrutas) {
+            products.add(getString(R.string.farm_production_fruits));
+        }
+        if (farm.produceVerduras) {
+            products.add(getString(R.string.farm_production_vegetables));
+        }
+        if (products.isEmpty()) {
+            return getString(R.string.farm_production_none);
+        }
+        StringBuilder summary = new StringBuilder();
+        for (String product : products) {
+            if (summary.length() > 0) {
+                summary.append(" · ");
+            }
+            summary.append(product);
+        }
+        return summary.toString();
+    }
+
+    private void showFarmFormPlaceholder(Finca farm) {
+        boolean creating = farm == null;
+        String title = getString(creating ? R.string.farm_create_title : R.string.farm_edit_title);
+        String message = creating
+                ? getString(R.string.farm_create_placeholder)
+                : getString(R.string.farm_edit_placeholder, farm.nombreFinca);
+        showPlaceholder(
+                Screen.FARM_FORM_PLACEHOLDER,
+                title,
+                message,
+                R.string.back_to_farms,
+                this::showFarmsList
+        );
     }
 
     private void loadUsers(int requestGeneration) {
