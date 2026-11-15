@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">DesarrooApps</string>
+    <string name="login_username_required">Ingresa tu nombre de usuario.</string>
+    <string name="login_password_required">Ingresa tu contraseña.</string>
+    <string name="login_invalid_credentials">Nombre de usuario o contraseña incorrectos.</string>
+    <string name="login_connection_error">No fue posible conectar con el servicio. Verifica tu conexión e inténtalo de nuevo.</string>
+    <string name="login_unexpected_response">El servicio devolvió una respuesta no válida.</string>
+    <string name="login_button">Iniciar sesión</string>
+    <string name="login_loading">Validando...</string>
+    <string name="session_welcome">Bienvenido, %1$s</string>
 </resources>
