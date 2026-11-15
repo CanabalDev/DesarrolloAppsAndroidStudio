@@ -1,6 +1,7 @@
 package com.example.desarrooapps;
 
 import android.os.Bundle;
+import android.content.Intent;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
@@ -48,6 +49,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView errorView;
     private int usersRequestGeneration;
     private int farmsRequestGeneration;
+    private boolean refreshFarmsOnResume;
     private int userFormRequestGeneration;
     private TextInputLayout userFormUsernameLayout;
     private TextInputLayout userFormNameLayout;
@@ -73,8 +75,7 @@ public class MainActivity extends AppCompatActivity {
         SECTION_PLACEHOLDER,
         USERS_LIST,
         USER_FORM,
-        FARMS_LIST,
-        FARM_FORM_PLACEHOLDER
+        FARMS_LIST
     }
 
     @Override
@@ -95,9 +96,6 @@ public class MainActivity extends AppCompatActivity {
                         break;
                     case FARMS_LIST:
                         showSignedInScreen(sessionManager.getUsername());
-                        break;
-                    case FARM_FORM_PLACEHOLDER:
-                        showFarmsList();
                         break;
                     default:
                         setEnabled(false);
@@ -295,7 +293,7 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.farms_back_button).setOnClickListener(view ->
                 showSignedInScreen(sessionManager.getUsername()));
         findViewById(R.id.farms_create_button).setOnClickListener(view ->
-                showFarmFormPlaceholder(null));
+                openFarmForm(null));
         findViewById(R.id.farms_refresh_button).setOnClickListener(view -> loadFarms(requestGeneration));
         findViewById(R.id.farms_retry_button).setOnClickListener(view -> loadFarms(requestGeneration));
         loadFarms(requestGeneration);
@@ -394,7 +392,7 @@ public class MainActivity extends AppCompatActivity {
             ));
             ((TextView) row.findViewById(R.id.farm_item_location)).setText(formatFarmLocation(farm));
             ((TextView) row.findViewById(R.id.farm_item_production)).setText(formatFarmProduction(farm));
-            row.setOnClickListener(view -> showFarmFormPlaceholder(farm));
+            row.setOnClickListener(view -> openFarmForm(farm.id));
             farmsContainer.addView(row);
         }
     }
@@ -450,19 +448,13 @@ public class MainActivity extends AppCompatActivity {
         return summary.toString();
     }
 
-    private void showFarmFormPlaceholder(Finca farm) {
-        boolean creating = farm == null;
-        String title = getString(creating ? R.string.farm_create_title : R.string.farm_edit_title);
-        String message = creating
-                ? getString(R.string.farm_create_placeholder)
-                : getString(R.string.farm_edit_placeholder, farm.nombreFinca);
-        showPlaceholder(
-                Screen.FARM_FORM_PLACEHOLDER,
-                title,
-                message,
-                R.string.back_to_farms,
-                this::showFarmsList
-        );
+    private void openFarmForm(String farmId) {
+        Intent intent = new Intent(this, FarmFormActivity.class);
+        if (farmId != null) {
+            intent.putExtra(FarmFormActivity.EXTRA_FARM_ID, farmId);
+        }
+        refreshFarmsOnResume = true;
+        startActivity(intent);
     }
 
     private void loadUsers(int requestGeneration) {
@@ -880,6 +872,15 @@ public class MainActivity extends AppCompatActivity {
             view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (refreshFarmsOnResume && currentScreen == Screen.FARMS_LIST) {
+            refreshFarmsOnResume = false;
+            loadFarms(farmsRequestGeneration);
+        }
     }
 
     @Override

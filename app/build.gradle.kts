@@ -1,8 +1,22 @@
+import org.gradle.api.tasks.Copy
+
 plugins {
     alias(libs.plugins.android.application)
 }
 
+val selectedCountriesAssetsDirectory = layout.buildDirectory.dir("generated/selectedCountriesAssets").get().asFile
+val copySelectedCountries = tasks.register<Copy>("copySelectedCountries") {
+    from(rootProject.file(".opencode/SelectedCountries.json"))
+    into(selectedCountriesAssetsDirectory)
+}
+
 android {
+    sourceSets {
+        getByName("main") {
+            assets.directories.add(selectedCountriesAssetsDirectory.absolutePath)
+        }
+    }
+
     namespace = "com.example.desarrooapps"
     compileSdk {
         version = release(37)
@@ -30,6 +44,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(copySelectedCountries)
 }
 
 dependencies {

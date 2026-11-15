@@ -96,28 +96,116 @@ final class ApiClient {
         return request("GET", "api/fincas", null);
     }
 
+    static ApiResponse getFarm(String farmId) throws IOException {
+        return request("GET", "api/finca/" + farmId, null);
+    }
+
+    static ApiResponse createFarm(
+            String name,
+            double areaHa,
+            double areaM2,
+            String ownerId,
+            String managerId,
+            String country,
+            String department,
+            String city,
+            boolean producesMilk,
+            boolean producesCereals,
+            boolean producesFruits,
+            boolean producesVegetables
+    ) throws IOException, JSONException {
+        return request("POST", "api/fincas", farmRequestBody(
+                name, areaHa, areaM2, ownerId, managerId, country, department, city,
+                producesMilk, producesCereals, producesFruits, producesVegetables));
+    }
+
+    static ApiResponse updateFarm(
+            String farmId,
+            String name,
+            double areaHa,
+            double areaM2,
+            String ownerId,
+            String managerId,
+            String country,
+            String department,
+            String city,
+            boolean producesMilk,
+            boolean producesCereals,
+            boolean producesFruits,
+            boolean producesVegetables
+    ) throws IOException, JSONException {
+        return request("PUT", "api/finca/" + farmId, farmRequestBody(
+                name, areaHa, areaM2, ownerId, managerId, country, department, city,
+                producesMilk, producesCereals, producesFruits, producesVegetables));
+    }
+
+    static ApiResponse deleteFarm(String farmId) throws IOException {
+        return request("DELETE", "api/finca/" + farmId, null);
+    }
+
+    private static JSONObject farmRequestBody(
+            String name,
+            double areaHa,
+            double areaM2,
+            String ownerId,
+            String managerId,
+            String country,
+            String department,
+            String city,
+            boolean producesMilk,
+            boolean producesCereals,
+            boolean producesFruits,
+            boolean producesVegetables
+    ) throws JSONException {
+        JSONObject body = new JSONObject();
+        body.put("nombreFinca", name);
+        body.put("areaHa", areaHa);
+        body.put("areaM2", areaM2);
+        body.put("propietarioId", ownerId);
+        body.put("capatazId", nullableJsonValue(managerId));
+        body.put("pais", nullableJsonValue(country));
+        body.put("departamento", nullableJsonValue(department));
+        body.put("ciudad", nullableJsonValue(city));
+        body.put("produceLeche", producesMilk);
+        body.put("produceCereales", producesCereals);
+        body.put("produceFrutas", producesFruits);
+        body.put("produceVerduras", producesVegetables);
+        return body;
+    }
+
+    private static Object nullableJsonValue(String value) {
+        return value == null || value.trim().isEmpty() ? JSONObject.NULL : value;
+    }
+
     static List<Finca> parseFarms(String responseBody) throws JSONException {
         JSONArray array = new JSONArray(responseBody);
         List<Finca> farms = new ArrayList<>(array.length());
         for (int index = 0; index < array.length(); index++) {
-            JSONObject item = array.getJSONObject(index);
-            farms.add(new Finca(
-                    item.optString("id"),
-                    item.optString("nombreFinca"),
-                    item.optDouble("areaHa", 0),
-                    item.optDouble("areaM2", 0),
-                    parseUserReference(item.optJSONObject("propietario")),
-                    parseUserReference(item.optJSONObject("capataz")),
-                    nullableString(item, "pais"),
-                    nullableString(item, "departamento"),
-                    nullableString(item, "ciudad"),
-                    item.optBoolean("produceLeche", false),
-                    item.optBoolean("produceCereales", false),
-                    item.optBoolean("produceFrutas", false),
-                    item.optBoolean("produceVerduras", false)
-            ));
+            farms.add(parseFarm(array.getJSONObject(index)));
         }
         return farms;
+    }
+
+    static Finca parseFarm(String responseBody) throws JSONException {
+        return parseFarm(new JSONObject(responseBody));
+    }
+
+    private static Finca parseFarm(JSONObject item) {
+        return new Finca(
+                item.optString("id"),
+                item.optString("nombreFinca"),
+                item.optDouble("areaHa", 0),
+                item.optDouble("areaM2", 0),
+                parseUserReference(item.optJSONObject("propietario")),
+                parseUserReference(item.optJSONObject("capataz")),
+                nullableString(item, "pais"),
+                nullableString(item, "departamento"),
+                nullableString(item, "ciudad"),
+                item.optBoolean("produceLeche", false),
+                item.optBoolean("produceCereales", false),
+                item.optBoolean("produceFrutas", false),
+                item.optBoolean("produceVerduras", false)
+        );
     }
 
     private static Usuario parseUserReference(JSONObject item) {
