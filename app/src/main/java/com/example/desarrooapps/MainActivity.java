@@ -63,10 +63,12 @@ public class MainActivity extends AppCompatActivity {
     private TextInputEditText userFormPasswordConfirmationInput;
     private Button userFormSaveButton;
     private Button userFormDeleteButton;
+    private Button userFormBackButton;
     private Button userFormRetryButton;
     private ProgressBar userFormProgress;
     private TextView userFormErrorView;
     private String editingUserId;
+    private boolean userFormMutationInProgress;
     private Screen currentScreen = Screen.LOGIN;
 
     private enum Screen {
@@ -92,7 +94,9 @@ public class MainActivity extends AppCompatActivity {
                         showSignedInScreen(sessionManager.getUsername());
                         break;
                     case USER_FORM:
-                        showUsersList();
+                        if (!userFormMutationInProgress) {
+                            showUsersList();
+                        }
                         break;
                     case FARMS_LIST:
                         showSignedInScreen(sessionManager.getUsername());
@@ -544,6 +548,7 @@ public class MainActivity extends AppCompatActivity {
     private void showUserForm(Usuario user) {
         boolean creating = user == null;
         currentScreen = Screen.USER_FORM;
+        userFormMutationInProgress = false;
         editingUserId = creating ? null : user.id;
         int requestGeneration = ++userFormRequestGeneration;
         setContentView(R.layout.activity_user_form);
@@ -561,6 +566,7 @@ public class MainActivity extends AppCompatActivity {
         userFormPasswordConfirmationInput = findViewById(R.id.user_form_password_confirmation);
         userFormSaveButton = findViewById(R.id.user_form_save_button);
         userFormDeleteButton = findViewById(R.id.user_form_delete_button);
+        userFormBackButton = findViewById(R.id.user_form_back_button);
         userFormRetryButton = findViewById(R.id.user_form_retry_button);
         userFormProgress = findViewById(R.id.user_form_progress);
         userFormErrorView = findViewById(R.id.user_form_error);
@@ -576,7 +582,11 @@ public class MainActivity extends AppCompatActivity {
         userFormPasswordLayout.setHelperText(creating
                 ? null
                 : getString(R.string.user_form_password_helper));
-        findViewById(R.id.user_form_back_button).setOnClickListener(view -> showUsersList());
+        userFormBackButton.setOnClickListener(view -> {
+            if (!userFormMutationInProgress) {
+                showUsersList();
+            }
+        });
         userFormSaveButton.setOnClickListener(view -> submitUserForm(requestGeneration));
         userFormDeleteButton.setOnClickListener(view -> confirmDeleteUser(requestGeneration));
         userFormRetryButton.setOnClickListener(view -> loadUserForEdit(editingUserId, requestGeneration));
@@ -832,7 +842,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setUserFormBusy(boolean busy) {
+        userFormMutationInProgress = busy;
         setUserFormEnabled(!busy);
+        userFormBackButton.setEnabled(!busy);
         userFormProgress.setVisibility(busy ? View.VISIBLE : View.GONE);
     }
 

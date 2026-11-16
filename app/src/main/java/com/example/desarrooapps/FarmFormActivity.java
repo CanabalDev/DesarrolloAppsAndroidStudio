@@ -14,6 +14,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.OnBackPressedCallback;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -41,6 +42,7 @@ public class FarmFormActivity extends AppCompatActivity {
     private int loadGeneration;
     private String farmId;
     private boolean updatingAreas;
+    private boolean mutationInProgress;
     private TextInputLayout nameLayout;
     private TextInputLayout areaHaLayout;
     private TextInputLayout areaM2Layout;
@@ -64,6 +66,7 @@ public class FarmFormActivity extends AppCompatActivity {
     private Button saveButton;
     private Button deleteButton;
     private Button retryButton;
+    private Button backButton;
     private ProgressBar progressBar;
     private TextView errorView;
     private List<Usuario> users = new ArrayList<>();
@@ -84,6 +87,14 @@ public class FarmFormActivity extends AppCompatActivity {
         setContentView(R.layout.activity_farm_form);
         applyWindowInsets();
         bindViews();
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (!mutationInProgress) {
+                    finish();
+                }
+            }
+        });
         configureForm();
         loadFormData();
     }
@@ -112,6 +123,7 @@ public class FarmFormActivity extends AppCompatActivity {
         saveButton = findViewById(R.id.farm_form_save_button);
         deleteButton = findViewById(R.id.farm_form_delete_button);
         retryButton = findViewById(R.id.farm_form_retry_button);
+        backButton = findViewById(R.id.farm_form_back_button);
         progressBar = findViewById(R.id.farm_form_progress);
         errorView = findViewById(R.id.farm_form_error);
     }
@@ -122,7 +134,11 @@ public class FarmFormActivity extends AppCompatActivity {
         titleView.setText(getString(creating ? R.string.farm_create_title : R.string.farm_edit_title));
         deleteButton.setVisibility(creating ? View.GONE : View.VISIBLE);
 
-        findViewById(R.id.farm_form_back_button).setOnClickListener(view -> finish());
+        backButton.setOnClickListener(view -> {
+            if (!mutationInProgress) {
+                finish();
+            }
+        });
         retryButton.setOnClickListener(view -> loadFormData());
         saveButton.setOnClickListener(view -> saveFarm());
         deleteButton.setOnClickListener(view -> confirmDeleteFarm());
@@ -135,10 +151,13 @@ public class FarmFormActivity extends AppCompatActivity {
             ownerLayout.setError(null);
             errorView.setVisibility(View.GONE);
         });
+        ownerInput.setOnClickListener(view -> ownerInput.showDropDown());
         managerInput.setOnItemClickListener((parent, view, position, id) -> {
             selectedManager = position == 0 ? null : managerOptions.get(position - 1);
             managerLayout.setError(null);
+            errorView.setVisibility(View.GONE);
         });
+        managerInput.setOnClickListener(view -> managerInput.showDropDown());
         countryInput.setOnItemClickListener((parent, view, position, id) -> {
             String country = (String) parent.getItemAtPosition(position);
             if (country.equals(selectedCountry)) {
@@ -148,10 +167,12 @@ public class FarmFormActivity extends AppCompatActivity {
             selectedDepartment = null;
             selectedCity = null;
             countryLayout.setError(null);
+            errorView.setVisibility(View.GONE);
             departmentInput.setText("", false);
             cityInput.setText("", false);
             populateDepartmentOptions(selectedCountry, null, null);
         });
+        countryInput.setOnClickListener(view -> countryInput.showDropDown());
         departmentInput.setOnItemClickListener((parent, view, position, id) -> {
             String department = (String) parent.getItemAtPosition(position);
             if (department.equals(selectedDepartment)) {
@@ -160,13 +181,21 @@ public class FarmFormActivity extends AppCompatActivity {
             selectedDepartment = department;
             selectedCity = null;
             departmentLayout.setError(null);
+            errorView.setVisibility(View.GONE);
             cityInput.setText("", false);
             populateCityOptions(selectedCountry, selectedDepartment, null);
         });
+        departmentInput.setOnClickListener(view -> departmentInput.showDropDown());
         cityInput.setOnItemClickListener((parent, view, position, id) -> {
             selectedCity = (String) parent.getItemAtPosition(position);
             cityLayout.setError(null);
+            errorView.setVisibility(View.GONE);
         });
+        cityInput.setOnClickListener(view -> cityInput.showDropDown());
+        produceMilkInput.setOnCheckedChangeListener((button, checked) -> errorView.setVisibility(View.GONE));
+        produceCerealsInput.setOnCheckedChangeListener((button, checked) -> errorView.setVisibility(View.GONE));
+        produceFruitsInput.setOnCheckedChangeListener((button, checked) -> errorView.setVisibility(View.GONE));
+        produceVegetablesInput.setOnCheckedChangeListener((button, checked) -> errorView.setVisibility(View.GONE));
 
         deleteButton.setText(R.string.delete_button);
         setFarmFormEnabled(false);
@@ -219,13 +248,13 @@ public class FarmFormActivity extends AppCompatActivity {
                     updatingAreas = false;
                     return;
                 }
-                Double numericValue = parseArea(value);
+                Double numericValue = FarmAreaMath.parse(value);
                 if (numericValue == null) {
                     return;
                 }
                 double calculated = hectaresSource
-                        ? roundToTwo(numericValue * 10000.0)
-                        : roundToTwo(numericValue / 10000.0);
+                        ? FarmAreaMath.squareMetersFromHectares(numericValue)
+                        : FarmAreaMath.hectaresFromSquareMeters(numericValue);
                 if (!Double.isFinite(calculated)) {
                     return;
                 }
@@ -267,7 +296,13 @@ public class FarmFormActivity extends AppCompatActivity {
                 }
                 if (failure == null) {
                     try (InputStream inputStream = getAssets().open("SelectedCountries.json")) {
-                        loadedCountries = LocationCatalog.parse(inputStream);
+                        try {
+                            loadedCountries = LocationCatalog.parse(inputStream);
+                        } catch (JSONException exception) {
+                            failure = getString(R.string.farm_form_location_error);
+                        }
+                    } catch (IOException exception) {
+                        failure = getString(R.string.farm_form_location_error);
                     }
                 }
             } catch (IOException exception) {
@@ -567,8 +602,8 @@ public class FarmFormActivity extends AppCompatActivity {
             layout.setError(getString(R.string.farm_form_area_required));
             return null;
         }
-        Double value = parseArea(text);
-        if (value == null || value < 0 || hasMoreThanTwoDecimals(text)) {
+        Double value = FarmAreaMath.parse(text);
+        if (value == null || value < 0 || FarmAreaMath.hasMoreThanTwoDecimals(text)) {
             layout.setError(getString(R.string.farm_form_area_invalid));
             return null;
         }
@@ -576,33 +611,7 @@ public class FarmFormActivity extends AppCompatActivity {
     }
 
     private boolean areasAreCompatible(double hectares, double squareMeters) {
-        double hectaresFromMeters = roundToTwo(squareMeters / 10000.0);
-        double metersFromHectares = roundToTwo(hectares * 10000.0);
-        return nearlyEqual(hectares, hectaresFromMeters)
-                || nearlyEqual(squareMeters, metersFromHectares);
-    }
-
-    private boolean nearlyEqual(double first, double second) {
-        return Math.abs(first - second) < 0.000001;
-    }
-
-    private boolean hasMoreThanTwoDecimals(String value) {
-        String normalized = value.replace(',', '.');
-        int decimalIndex = normalized.indexOf('.');
-        return decimalIndex >= 0 && normalized.length() - decimalIndex - 1 > 2;
-    }
-
-    private Double parseArea(String value) {
-        try {
-            double parsed = Double.parseDouble(value.replace(',', '.'));
-            return Double.isFinite(parsed) ? parsed : null;
-        } catch (NumberFormatException exception) {
-            return null;
-        }
-    }
-
-    private double roundToTwo(double value) {
-        return Math.round(value * 100.0) / 100.0;
+        return FarmAreaMath.areCompatible(hectares, squareMeters);
     }
 
     private String formatArea(double value) {
@@ -670,8 +679,10 @@ public class FarmFormActivity extends AppCompatActivity {
     }
 
     private void setFormBusy(boolean busy) {
+        mutationInProgress = busy;
         progressBar.setVisibility(busy ? View.VISIBLE : View.GONE);
         setFarmFormEnabled(!busy);
+        backButton.setEnabled(!busy);
     }
 
     private void setFarmFormEnabled(boolean enabled) {
@@ -681,14 +692,18 @@ public class FarmFormActivity extends AppCompatActivity {
         ownerInput.setEnabled(enabled);
         managerInput.setEnabled(enabled);
         countryInput.setEnabled(enabled);
-        departmentInput.setEnabled(enabled);
-        cityInput.setEnabled(enabled);
+        departmentInput.setEnabled(enabled && hasOptions(departmentInput));
+        cityInput.setEnabled(enabled && hasOptions(cityInput));
         produceMilkInput.setEnabled(enabled);
         produceCerealsInput.setEnabled(enabled);
         produceFruitsInput.setEnabled(enabled);
         produceVegetablesInput.setEnabled(enabled);
         saveButton.setEnabled(enabled);
         deleteButton.setEnabled(enabled);
+    }
+
+    private boolean hasOptions(MaterialAutoCompleteTextView input) {
+        return input.getAdapter() != null && input.getAdapter().getCount() > 0;
     }
 
     private String textOf(TextInputEditText input) {
