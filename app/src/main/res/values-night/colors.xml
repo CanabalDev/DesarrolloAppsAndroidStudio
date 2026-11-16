@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="login_background">#101713</color>
+    <color name="surface_card">#1B251F</color>
+    <color name="surface_variant">#29362E</color>
+    <color name="forest_green">#8DBB9A</color>
+    <color name="badge_green">#26382C</color>
+    <color name="card_stroke">#3B4B40</color>
+    <color name="text_primary">#E5EEE7</color>
+    <color name="text_secondary">#B1BDB4</color>
+    <color name="color_on_primary">#102017</color>
+    <color name="color_on_error">#690005</color>
+    <color name="error_red">#FFB4AB</color>
+</resources>

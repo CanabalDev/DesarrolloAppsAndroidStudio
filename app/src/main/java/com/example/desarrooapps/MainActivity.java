@@ -101,6 +101,9 @@ public class MainActivity extends AppCompatActivity {
                     case FARMS_LIST:
                         showSignedInScreen(sessionManager.getUsername());
                         break;
+                    case DASHBOARD:
+                        showLoginScreen();
+                        break;
                     default:
                         setEnabled(false);
                         getOnBackPressedDispatcher().onBackPressed();
@@ -879,11 +882,24 @@ public class MainActivity extends AppCompatActivity {
 
     private void applyWindowInsets() {
         View root = findViewById(R.id.main);
+        int initialLeft = root.getPaddingLeft();
+        int initialTop = root.getPaddingTop();
+        int initialRight = root.getPaddingRight();
+        int initialBottom = root.getPaddingBottom();
         ViewCompat.setOnApplyWindowInsetsListener(root, (view, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            Insets systemBars = insets.getInsets(
+                    WindowInsetsCompat.Type.systemBars()
+                            | WindowInsetsCompat.Type.displayCutout()
+            );
+            view.setPadding(
+                    initialLeft + systemBars.left,
+                    initialTop + systemBars.top,
+                    initialRight + systemBars.right,
+                    initialBottom + systemBars.bottom
+            );
             return insets;
         });
+        ViewCompat.requestApplyInsets(root);
     }
 
     @Override
